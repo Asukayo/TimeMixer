@@ -12,17 +12,35 @@ class DFT_series_decomp(nn.Module):
 
     def __init__(self, top_k=5):
         super(DFT_series_decomp, self).__init__()
+        # 保留频谱中最大的前五个频率分量作为季节性成分
         self.top_k = top_k
 
     def forward(self, x):
-        xf = torch.fft.rfft(x)
-        freq = abs(xf)
+        # 假设传入的x.shape为[[64, 38, 100]],batch_size=64, features=38, seq_len=100
+
+        # 对最后一个维度（时间维度）进行实数FFT
+        # xf 是复数张量，包含频域信息
+        xf = torch.fft.rfft(x) # xf.shape = [64, 38, 51]（因为rfft输出长度为 ⌊n/2⌋+1=51
+
+        # 计算频率幅度谱
+        freq = abs(xf) # freq.shape = [64, 38, 51]，包含各频率分量的幅度
+        # 将DC分量（零频率）设为0，去除常数项影响
         freq[0] = 0
+
+        # top_k_freq.shape = [64, 38, 5]：每个特征维度上幅度最大的5个频率值
+        # top_list.shape = [64, 38, 5]：对应的频率索引
         top_k_freq, top_list = torch.topk(freq, self.top_k)
+        # 频域滤波
+        # 幅度小于等于第5大频率分量的所有频率置零
         xf[freq <= top_k_freq.min()] = 0
+        # 逆傅里叶变换回时域
         x_season = torch.fft.irfft(xf)
+        # x_trend.shape = [64, 38, 100]，趋势/长期变化成分
         x_trend = x - x_season
+        #
         return x_season, x_trend
+
+
 
 
 class MultiScaleSeasonMixing(nn.Module):
